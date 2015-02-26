@@ -1227,7 +1227,12 @@ hash_save(khmer_KCountingHash_Object * me, PyObject * args)
         return NULL;
     }
 
-    counting->save(filename);
+    try {
+	counting->save(filename);
+    } catch (khmer_file_exception &e) {
+	PyErr_SetString(PyExc_IOError, e.what());
+	return NULL;
+    }
 
     Py_RETURN_NONE;
 }

@@ -14,6 +14,7 @@
 #include <math.h>
 #include <algorithm>
 #include <sstream>
+#include <errno.h>
 
 using namespace std;
 using namespace khmer;
@@ -726,6 +727,7 @@ CountingHashFileWriter::CountingHashFileWriter(
     unsigned long long save_tablesize;
 
     ofstream outfile(outfilename.c_str(), ios::binary);
+    //outfile.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
 
     unsigned char version = SAVED_FORMAT_VERSION;
     outfile.write((const char *) &version, 1);
@@ -761,7 +763,7 @@ CountingHashFileWriter::CountingHashFileWriter(
         }
     }
     if (outfile.fail()) {
-        perror("Hash writing file access failure:");
+	    throw new khmer_file_exception(strerror(errno));
     }
     outfile.close();
 }
