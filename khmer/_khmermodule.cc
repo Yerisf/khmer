@@ -2048,7 +2048,12 @@ hashbits_save_stop_tags(khmer_KHashbits_Object * me, PyObject * args)
         return NULL;
     }
 
-    hashbits->save_stop_tags(filename);
+    try {
+	hashbits->save_stop_tags(filename);
+    } catch (khmer_file_exception &e) {
+	PyErr_SetString(PyExc_IOError, e.what());
+	return NULL;
+    }
 
     Py_RETURN_NONE;
 }
@@ -2824,7 +2829,12 @@ hashbits_save_partitionmap(khmer_KHashbits_Object * me, PyObject * args)
         return NULL;
     }
 
-    hashbits->partition->save_partitionmap(filename);
+    try {
+	hashbits->partition->save_partitionmap(filename);
+    } catch (khmer_file_exception &e) {
+	PyErr_SetString(PyExc_IOError, e.what());
+	return NULL;
+    }
 
     Py_RETURN_NONE;
 }
@@ -2977,7 +2987,12 @@ hashbits_save(khmer_KHashbits_Object * me, PyObject * args)
         return NULL;
     }
 
-    hashbits->save(filename);
+    try {
+	hashbits->save(filename);
+    } catch (khmer_file_exception &e) {
+	PyErr_SetString(PyExc_IOError, e.what());
+	return NULL;
+    }
 
     Py_RETURN_NONE;
 }
@@ -3022,7 +3037,12 @@ hashbits_save_tagset(khmer_KHashbits_Object * me, PyObject * args)
         return NULL;
     }
 
-    hashbits->save_tagset(filename);
+    try {
+	hashbits->save_tagset(filename);
+    } catch (khmer_file_exception &e) {
+	PyErr_SetString(PyExc_IOError, e.what());
+	return NULL;
+    }
 
     Py_RETURN_NONE;
 }
@@ -3043,7 +3063,12 @@ hashbits_save_subset_partitionmap(khmer_KHashbits_Object * me, PyObject * args)
 
     Py_BEGIN_ALLOW_THREADS
 
-    subset_p->save_partitionmap(filename);
+    try{
+	subset_p->save_partitionmap(filename);
+    } catch (khmer_file_exception &e) {
+	PyErr_SetString(PyExc_IOError, e.what());
+	return NULL;
+    }
 
     Py_END_ALLOW_THREADS
 

@@ -48,6 +48,9 @@ void CountingHash::output_fasta_kmer_pos_freq(
     }
 
     delete parser;
+    if (outfile.fail()) {
+	    throw khmer_file_exception(strerror(errno));
+    }
 
     outfile.close();
 }
@@ -488,7 +491,7 @@ CountingHashFileReader::CountingHashFileReader(
         } else {
             err = "Unknown error in opening file: " + infilename;
         }
-        throw khmer_file_exception(err.c_str());
+        throw khmer_file_exception(err + " " + strerror(errno));
     }
 
     if (ht._counts) {
@@ -576,9 +579,10 @@ CountingHashFileReader::CountingHashFileReader(
         if (infile.eof()) {
             err = "Unexpected end of k-mer count file: " + infilename;
         } else {
-            err = "Error reading from k-mer count file: " + infilename;
+            err = "Error reading from k-mer count file: " + infilename + " "
+		    + strerror(errno);
         }
-        throw khmer_file_exception(err.c_str());
+        throw khmer_file_exception(err);
     }
 }
 
@@ -611,7 +615,8 @@ CountingHashGzFileReader::CountingHashGzFileReader(
     int read_t = gzread(infile, (char *) &ht_type, 1);
 
     if (read_v <= 0 || read_t <= 0) {
-        std::string err = "K-mer count file read error: " + infilename;
+        std::string err = "K-mer count file read error: " + infilename + " "
+		+ strerror(errno);
         gzclose(infile);
         throw khmer_file_exception(err.c_str());
     } else if (!(version == SAVED_FORMAT_VERSION)
@@ -638,7 +643,8 @@ CountingHashGzFileReader::CountingHashGzFileReader(
                          sizeof(save_n_tables));
 
     if (read_b <= 0 || read_k <= 0 || read_nt <= 0) {
-        std::string err = "K-mer count file header read error: " + infilename;
+        std::string err = "K-mer count file header read error: " + infilename
+		+ " " + strerror(errno);
         gzclose(infile);
         throw khmer_file_exception(err.c_str());
     }
@@ -657,8 +663,14 @@ CountingHashGzFileReader::CountingHashGzFileReader(
                         sizeof(save_tablesize));
 
         if (read_b <= 0) {
-            std::string err = "K-mer count file header read error: " \
-                              + infilename;
+	    std::string gzerr = gzerror(infile, &read_b);
+            std::string err = "K-mer count file header read error: "
+		    + infilename;
+	    if (read_b == Z_ERRNO) {
+		    err = err + " " + strerror(errno);
+	    } else {
+		    err = err + " " + gzerr;
+	    }
             gzclose(infile);
             throw khmer_file_exception(err.c_str());
         }
@@ -674,7 +686,13 @@ CountingHashGzFileReader::CountingHashGzFileReader(
                             (unsigned) (tablesize - loaded));
 
             if (read_b <= 0) {
+		std::string gzerr = gzerror(infile, &read_b);
                 std::string err = "K-mer count file read error: " + infilename;
+		if (read_b == Z_ERRNO) {
+			err = err + " " + strerror(errno);
+		} else {
+			err = err + " " + gzerr;
+		}
                 gzclose(infile);
                 throw khmer_file_exception(err.c_str());
             }
@@ -686,7 +704,13 @@ CountingHashGzFileReader::CountingHashGzFileReader(
     HashIntoType n_counts = 0;
     read_b = gzread(infile, (char *) &n_counts, sizeof(n_counts));
     if (read_b <= 0) {
+	std::string gzerr = gzerror(infile, &read_b);
         std::string err = "K-mer count header read error: " + infilename;
+	if (read_b == Z_ERRNO) {
+		err = err + " " + strerror(errno);
+	} else {
+		err = err + " " + gzerr;
+	}
         gzclose(infile);
         throw khmer_file_exception(err.c_str());
     }
@@ -702,8 +726,14 @@ CountingHashGzFileReader::CountingHashGzFileReader(
             int read_c = gzread(infile, (char *) &count, sizeof(count));
 
             if (read_k <= 0 || read_c <= 0) {
+		std::string gzerr = gzerror(infile, &read_b);
                 std::string err = "K-mer count read error: " + infilename;
-                gzclose(infile);
+		if (read_b == Z_ERRNO) {
+			err = err + " " + strerror(errno);
+		} else {
+			err = err + " " + gzerr;
+		}
+		gzclose(infile);
                 throw khmer_file_exception(err.c_str());
             }
 
@@ -727,7 +757,6 @@ CountingHashFileWriter::CountingHashFileWriter(
     unsigned long long save_tablesize;
 
     ofstream outfile(outfilename.c_str(), ios::binary);
-    //outfile.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
 
     unsigned char version = SAVED_FORMAT_VERSION;
     outfile.write((const char *) &version, 1);
@@ -763,7 +792,7 @@ CountingHashFileWriter::CountingHashFileWriter(
         }
     }
     if (outfile.fail()) {
-	    throw new khmer_file_exception(strerror(errno));
+	    throw khmer_file_exception(strerror(errno));
     }
     outfile.close();
 }
@@ -776,11 +805,20 @@ CountingHashGzFileWriter::CountingHashGzFileWriter(
         throw khmer_exception();
     }
 
+    int errnum = 0;
     unsigned int save_ksize = ht._ksize;
     unsigned char save_n_tables = ht._n_tables;
     unsigned long long save_tablesize;
 
     gzFile outfile = gzopen(outfilename.c_str(), "wb");
+    if (outfile == NULL) {
+	    const char * error = gzerror(outfile, &errnum);
+	    if (errnum == Z_ERRNO) {
+		    throw khmer_file_exception(strerror(errno));
+	    } else {
+		    throw khmer_file_exception(error);
+	    }
+    }
 
     unsigned char version = SAVED_FORMAT_VERSION;
     gzwrite(outfile, (const char *) &version, 1);
@@ -820,7 +858,12 @@ CountingHashGzFileWriter::CountingHashGzFileWriter(
             gzwrite(outfile, (const char *) &it->second, sizeof(it->second));
         }
     }
-
+    const char * error = gzerror(outfile, &errnum);
+    if (errnum == Z_ERRNO) {
+	    throw khmer_file_exception(strerror(errno));
+    } else if (errnum != Z_OK) {
+	    throw khmer_file_exception(error);
+    }
     gzclose(outfile);
 }
 
