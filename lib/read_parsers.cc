@@ -8,7 +8,9 @@
 #include "read_parsers.hh"
 
 #include <cstring>
+#include <string.h>
 #include "khmer_exception.hh"
+#include "seqan/basic.h"
 
 namespace khmer
 {
@@ -19,7 +21,13 @@ namespace read_parsers
 
 SeqAnParser::SeqAnParser( char const * filename ) : IParser( )
 {
-    if (!seqan::open(_file, filename)) {
+    bool ret = false;
+    if (strlen(filename) == 1 && strcmp(filename, "-") == 0) {
+	ret = seqan::open(_file, std::cin);
+    } else {
+	ret = seqan::open(_file, filename);
+    }
+    if (!ret) {
 	std::string message = "Could not open ";
         message = message + filename + " for reading.";
         throw InvalidStreamHandle(message.c_str());
@@ -34,27 +42,39 @@ SeqAnParser::SeqAnParser( char const * filename ) : IParser( )
 
 bool SeqAnParser::is_complete()
 {
-    return seqan::atEnd(_file);
+    while (!__sync_bool_compare_and_swap(& _seqan_spin_lock, 0, 1));
+    bool end = seqan::atEnd(_file);
+    __asm__ __volatile__ ("" ::: "memory");
+    _seqan_spin_lock = 0;
+    return end;
 }
 
 void SeqAnParser::imprint_next_read(Read &the_read)
 {
     the_read.reset();
-    if (seqan::atEnd(_file)) {
-        throw NoMoreReadsAvailable();
-    }
-    else {
-        while (!__sync_bool_compare_and_swap(& _seqan_spin_lock, 0, 1));
+    while (!__sync_bool_compare_and_swap(& _seqan_spin_lock, 0, 1));
+    try {
 	seqan::readRecord(the_read.name, the_read.sequence, the_read.quality,
 		_file);
-        __asm__ __volatile__ ("" ::: "memory");
-        _seqan_spin_lock = 0;
+    } catch (std::exception &e) {
+	__asm__ __volatile__ ("" ::: "memory");
+	_seqan_spin_lock = 0;
+	if (seqan::atEnd(_file)) {
+	    throw NoMoreReadsAvailable();
+	} else {
+	    throw StreamReadError(e.what());
+	}
     }
+    __asm__ __volatile__ ("" ::: "memory");
+    _seqan_spin_lock = 0;
 }
 
 SeqAnParser::~SeqAnParser()
 {
+    while (!__sync_bool_compare_and_swap(& _seqan_spin_lock, 0, 1));
     seqan::close(_file);
+    __asm__ __volatile__ ("" ::: "memory");
+    _seqan_spin_lock = 0;
 }
 
 IParser * const
